@@ -13,6 +13,7 @@ import (
 const (
 	DownloadsPath = "/Users/lander/Downloads"
 	MusicPath     = "/Users/lander/ext_music"
+	MaxTransfers  = 5
 )
 
 func moveFile(source, destination string) error {
@@ -51,7 +52,7 @@ func doMove(c chan string) {
 
 func main() {
 	// The channel which will send the found files to the doMove function
-	c := make(chan string)
+	c := make(chan string, MaxTransfers)
 	go doMove(c)
 	fmt.Println("Looking for new files with the extension .mp3 in", DownloadsPath)
 	for {
@@ -69,6 +70,4 @@ func main() {
 		}
 		time.Sleep(30 * time.Second)
 	}
-	// Wait until the channel is clear
-	<-c
 }
