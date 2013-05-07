@@ -34,7 +34,7 @@ func moveFile(source, destination string) error {
 }
 
 func doMove(c chan string) {
-	for _, name := <-c {
+	for name := range c {
 		oldPath := filepath.Join(DownloadsPath, name)
 		newPath := filepath.Join(MusicPath, name)
 		err := moveFile(oldPath, newPath)
