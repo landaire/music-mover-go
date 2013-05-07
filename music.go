@@ -34,19 +34,20 @@ func moveFile(source, destination string) error {
 }
 
 func doMove(c chan string) {
-	name := <-c
-	oldPath := filepath.Join(DownloadsPath, name)
-	newPath := filepath.Join(MusicPath, name)
-	err := moveFile(oldPath, newPath)
-	if err != nil {
-		fmt.Println("Error occured when trying to move the file:", err)
-		return
-	}
-	err = os.Remove(oldPath)
-	if err != nil {
-		fmt.Println("Error occured when trying to remove the file:", err)
-	} else {
-		fmt.Println("Moved", oldPath, "to", newPath)
+	for _, name := <-c {
+		oldPath := filepath.Join(DownloadsPath, name)
+		newPath := filepath.Join(MusicPath, name)
+		err := moveFile(oldPath, newPath)
+		if err != nil {
+			fmt.Println("Error occured when trying to move the file:", err)
+			continue
+		}
+		err = os.Remove(oldPath)
+		if err != nil {
+			fmt.Println("Error occured when trying to remove the file:", err)
+		} else {
+			fmt.Println("Moved", oldPath, "to", newPath)
+		}
 	}
 }
 
