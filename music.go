@@ -75,6 +75,7 @@ func handleFile(c chan string) {
 			file.SetArtist(artist)
 			file.Save()
 		}
+		file.Close()
 	}
 }
 
