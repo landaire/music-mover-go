@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	notifier "github.com/deckarep/gosx-notifier"
 	"io"
 	"io/ioutil"
 	"os"
@@ -48,6 +49,13 @@ func handleFile(c chan string) {
 		if err != nil {
 			fmt.Println("Error occured when trying to remove the file:", err)
 		} else {
+			// OS X notification
+			note := notifier.NewNotification(fmt.Sprintf("Found and moved %s", filepath.Base(newPath)))
+			note.Title = "Music Mover"
+			note.Sender = "com.apple.Finder"
+			note.Link = fmt.Sprintf("file://%s", newPath)
+			note.Push()
+
 			fmt.Println("Moved", oldPath, "to", newPath)
 		}
 	}
