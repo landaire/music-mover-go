@@ -1,14 +1,22 @@
+//
+
+// Command music is a utility for monitoring a path for new music, and moving it elsewhere
+
 package main
 
 import (
 	"fmt"
-	notifier "github.com/deckarep/gosx-notifier"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"time"
+
+	notifier "github.com/deckarep/gosx-notifier"
+    "github.com/codegangsta/cli"
+    "github.com/op/go-logging"
+    "github.com/landaire/pboextractor/Godeps/_workspace/src/github.com/codegangsta/cli"
 )
 
 const (
@@ -17,7 +25,60 @@ const (
 	MaxTransfers  = 5
 )
 
-var regex = regexp.MustCompile(`^(?P<Artist>.*) - (?P<Title>.*)\.mp3`)
+var log = logging.MustGetLogger("music")
+
+func main() {
+    app := cli.NewApp()
+    app.Author = "Lander Brandt"
+    app.Email = "@landaire"
+    app.EnableBashCompletion = true
+
+    app.Flags = []cli.Flag{
+        cli.StringFlag{
+            Name: "source, src",
+            Usage: "source directory to monitor",
+        },
+        cli.StringFlag{
+            Name: "dest, dst",
+            Usage: "destination directory to move files to",
+        },
+        cli.BoolFlag{
+            Name: "verbose, v",
+            Value: false,
+            Usage: "enable verbose logging",
+        },
+    }
+
+    app.Action(func (c *cli.Context) {
+
+    })
+
+    logging.DEBUG("Starting application")
+
+    app.Run(os.Args)
+}
+
+func scan(source string, destination string, pattern regexp.Regexp) {
+    // The channel which will send the found files to the doMove function
+    pathChan := make(chan string, MaxTransfers)
+    go handleFile(pathChan)
+    fmt.Println("Looking for new files with the extension .mp3 in", DownloadsPath)
+    for {
+        entries, err := ioutil.ReadDir(DownloadsPath)
+        if err != nil {
+            fmt.Println("Error")
+            continue
+        }
+        for _, entry := range entries {
+            match, _ := regexp.MatchString(`(?i).*\.mp3$`, entry.Name())
+            if match {
+                fmt.Println("\nFound file:", entry.Name())
+                pathChan <- entry.Name()
+            }
+        }
+        time.Sleep(30 * time.Second)
+    }
+}
 
 func moveFile(source, destination string) error {
 	sourceFile, err := os.Open(source)
@@ -58,27 +119,5 @@ func handleFile(c chan string) {
 
 			fmt.Println("Moved", oldPath, "to", newPath)
 		}
-	}
-}
-
-func main() {
-	// The channel which will send the found files to the doMove function
-	c := make(chan string, MaxTransfers)
-	go handleFile(c)
-	fmt.Println("Looking for new files with the extension .mp3 in", DownloadsPath)
-	for {
-		entries, err := ioutil.ReadDir(DownloadsPath)
-		if err != nil {
-			fmt.Println("Error")
-			continue
-		}
-		for _, entry := range entries {
-			match, _ := regexp.MatchString(`(?i).*\.mp3$`, entry.Name())
-			if match {
-				fmt.Println("\nFound file:", entry.Name())
-				c <- entry.Name()
-			}
-		}
-		time.Sleep(30 * time.Second)
 	}
 }
