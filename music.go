@@ -17,7 +17,8 @@ import (
 	"github.com/codegangsta/cli"
 	notifier "github.com/deckarep/gosx-notifier"
 	"github.com/op/go-logging"
-	fsnotify "gopkg.in/fsnotify.v1"
+    "io/ioutil"
+    "time"
 )
 
 const (
@@ -69,7 +70,6 @@ func main() {
 			backend = logging.NewLogBackend(os.Stdout, "", 0)
 		}
 
-		logging.SetFormatter(logging.GlogFormatter)
 		logging.SetBackend(backend)
 		log.Info("Starting application")
 
@@ -86,59 +86,54 @@ func main() {
 
 // Scans the directory to watch for new files matching the pattern
 func scan() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Error("Could not open fsnotify watcher: %s", err)
-	}
-
     log.Info("Watching path %s", sourcePath)
-    if _, err := os.Stat(destPath); err != nil {
-        if os.IsNotExist(err) {
-            log.Error("Destination %s is unavailable at this time", destPath)
-        }
+    if _, err := os.Stat(destPath); err != nil && os.IsNotExist(err) {
+        log.Error("Destination unavailable: %s", destPath)
     }
 
-	for event := range watcher.Events {
-		if event.Op != fsnotify.Create || !filenamePattern.MatchString(event.Name) {
-			continue
-		}
+    files := make(chan string)
 
-        // Ensure the destination path is available. This is here in the case such as mine where my external hard drive
-        // is not always plugged in. This keeps the queue intact until the drive is connected
-        for {
-            _, err = os.Stat(destPath)
-            if err == nil {
-                break;
-            } else if !os.IsNotExist(err) {
-                log.Fatal(err)
-            }
+    go handleFiles(files)
+
+    for {
+        readDir(sourcePath, files)
+        time.Sleep(15 * time.Second)
+    }
+}
+
+func readDir(dir string, validFiles chan string) {
+    files, err := ioutil.ReadDir(dir)
+    if err != nil {
+        log.Error("Error occurred reading source dir: %s", err)
+        return
+    }
+
+    for _, fileinfo := range files {
+        // Not doing recursive searches
+        if fileinfo.IsDir() || !filenamePattern.MatchString(fileinfo.Name()) {
+            continue
         }
 
-		if err = handleFile(event.Name); err != nil {
-			log.Error("Error occured when trying to move the file %s: %s", event.Name, err)
-			continue
-		}
-
-		fireNotification(destFilePath(event.Name))
-	}
+        validFiles <- filepath.Join(sourcePath, fileinfo.Name())
+    }
 }
 
 // Attempts to move a file to the destination path and perform cleanup afterwards
-func handleFile(file string) error {
-	if stat, _ := os.Stat(file); stat.IsDir() {
-		return nil
-	}
+func handleFiles(files chan string) {
+    for file := range files {
+        newPath := destFilePath(file)
+        if err := moveFile(file, newPath); err != nil {
+            log.Error("Could not move file %s: %s", file, err)
+            continue
+        }
 
-	newPath := destFilePath(file)
-	if err := moveFile(file, newPath); err != nil {
-		return err
-	}
+        if err := os.Remove(file); err != nil {
+            log.Error("Could not remove file %s: %s", file, err)
+            continue
+        }
 
-	if err := os.Remove(file); err != nil {
-		return err
-	}
-
-	return nil
+        fireNotification(destFilePath(file))
+    }
 }
 
 // Moves source file to destination
@@ -166,7 +161,7 @@ func fireNotification(newFilePath string) {
 	}
 
 	// OS X notification
-	note := notifier.NewNotification(fmt.Sprintf("Found and moved %s", filepath.Base(newFilePath)))
+	note := notifier.NewNotification(fmt.Sprintf("Moved %s", filepath.Base(newFilePath)))
 	note.Title = "Music Mover"
 	note.Sender = "com.apple.Finder"
 	note.Link = fmt.Sprintf("file://%s", newFilePath)
@@ -175,5 +170,5 @@ func fireNotification(newFilePath string) {
 
 // Returns the destination file path from a given original file path
 func destFilePath(originalPath string) string {
-	return path.Join(destPath, filepath.Base(originalPath))
+    return path.Join(destPath, filepath.Base(originalPath))
 }
