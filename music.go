@@ -14,11 +14,12 @@ import (
 
 	"path"
 
+	"io/ioutil"
+	"time"
+
 	"github.com/codegangsta/cli"
 	notifier "github.com/deckarep/gosx-notifier"
 	"github.com/op/go-logging"
-    "io/ioutil"
-    "time"
 )
 
 const (
@@ -37,6 +38,9 @@ var (
 
 func main() {
 	app := cli.NewApp()
+	app.Name = "music"
+	app.Usage = "Scans a source directory for new music files matching a pattern and moves them to the" +
+		"destination directory"
 	app.Author = "Lander Brandt"
 	app.Email = "@landaire"
 	app.EnableBashCompletion = true
@@ -62,6 +66,8 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) {
+		checkFlags(c)
+
 		outfile, _ := os.Open(os.DevNull)
 		defer outfile.Close()
 
@@ -84,56 +90,63 @@ func main() {
 	app.Run(os.Args)
 }
 
+func checkFlags(c *cli.Context) {
+	if !c.IsSet(sourceFlag) || !c.IsSet(destFlag) {
+		c.App.Command("help").Run(c)
+		os.Exit(1)
+	}
+}
+
 // Scans the directory to watch for new files matching the pattern
 func scan() {
-    log.Info("Watching path %s", sourcePath)
-    if _, err := os.Stat(destPath); err != nil && os.IsNotExist(err) {
-        log.Error("Destination unavailable: %s", destPath)
-    }
+	log.Info("Watching path %s", sourcePath)
+	if _, err := os.Stat(destPath); err != nil && os.IsNotExist(err) {
+		log.Error("Destination unavailable: %s", destPath)
+	}
 
-    files := make(chan string)
+	files := make(chan string)
 
-    go handleFiles(files)
+	go handleFiles(files)
 
-    for {
-        readDir(sourcePath, files)
-        time.Sleep(15 * time.Second)
-    }
+	for {
+		readDir(sourcePath, files)
+		time.Sleep(15 * time.Second)
+	}
 }
 
 func readDir(dir string, validFiles chan string) {
-    files, err := ioutil.ReadDir(dir)
-    if err != nil {
-        log.Error("Error occurred reading source dir: %s", err)
-        return
-    }
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Error("Error occurred reading source dir: %s", err)
+		return
+	}
 
-    for _, fileinfo := range files {
-        // Not doing recursive searches
-        if fileinfo.IsDir() || !filenamePattern.MatchString(fileinfo.Name()) {
-            continue
-        }
+	for _, fileinfo := range files {
+		// Not doing recursive searches
+		if fileinfo.IsDir() || !filenamePattern.MatchString(fileinfo.Name()) {
+			continue
+		}
 
-        validFiles <- filepath.Join(sourcePath, fileinfo.Name())
-    }
+		validFiles <- filepath.Join(sourcePath, fileinfo.Name())
+	}
 }
 
 // Attempts to move a file to the destination path and perform cleanup afterwards
 func handleFiles(files chan string) {
-    for file := range files {
-        newPath := destFilePath(file)
-        if err := moveFile(file, newPath); err != nil {
-            log.Error("Could not move file %s: %s", file, err)
-            continue
-        }
+	for file := range files {
+		newPath := destFilePath(file)
+		if err := moveFile(file, newPath); err != nil {
+			log.Error("Could not move file %s: %s", file, err)
+			continue
+		}
 
-        if err := os.Remove(file); err != nil {
-            log.Error("Could not remove file %s: %s", file, err)
-            continue
-        }
+		if err := os.Remove(file); err != nil {
+			log.Error("Could not remove file %s: %s", file, err)
+			continue
+		}
 
-        fireNotification(destFilePath(file))
-    }
+		fireNotification(destFilePath(file))
+	}
 }
 
 // Moves source file to destination
@@ -170,5 +183,5 @@ func fireNotification(newFilePath string) {
 
 // Returns the destination file path from a given original file path
 func destFilePath(originalPath string) string {
-    return path.Join(destPath, filepath.Base(originalPath))
+	return path.Join(destPath, filepath.Base(originalPath))
 }
