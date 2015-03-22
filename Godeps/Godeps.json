@@ -14,11 +14,6 @@
 		{
 			"ImportPath": "github.com/op/go-logging",
 			"Rev": "e5fb9bb8a3a168cc269b38f092b65d2e18cebb9a"
-		},
-		{
-			"ImportPath": "gopkg.in/fsnotify.v1",
-			"Comment": "v1.1.0",
-			"Rev": "f582d920d11386e8ae15227bb5933a8f9b4c3dec"
 		}
 	]
 }
